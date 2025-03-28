@@ -1,3 +1,5 @@
+-- Create a new table with the query results
+CREATE TABLE projects_new AS
 WITH ranked_projects AS (
     SELECT *,
            ROW_NUMBER() OVER (
@@ -48,6 +50,10 @@ WITH ranked_projects AS (
            ) AS row_num
     FROM projects
 )
-SELECT id, name, version
-FROM ranked_projects
-WHERE row_num = 1;
+SELECT * FROM ranked_projects WHERE row_num = 1;
+
+-- Drop the original projects table
+DROP TABLE projects;
+
+-- Rename the new table to projects
+ALTER TABLE projects_new RENAME TO projects;
