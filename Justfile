@@ -6,7 +6,7 @@ setup:
 	if [ "$(uname)" = "Darwin" ]; then \
 		brew install dolt \
 	else \
-		sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | sudo bash'
+		sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | sudo bash' \
 	fi
 
 	pip install sqlite3-to-mysql
