@@ -3,8 +3,15 @@ export PATH := "/opt/homebrew/opt/sqlite/bin:" + env_var('PATH')
 set unstable
 
 setup:
-	brew install dolt
+	if [ "$(uname)" = "Darwin" ]; then \
+		brew install dolt \
+	else \
+		sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | sudo bash'
+	fi
+
 	pip install sqlite3-to-mysql
+
+update_dolt: download_latest_sqlite simplify_sqlite sqlite_to_dolt
 
 download_latest_sqlite:
 	LATEST_URL=$(curl -s https://api.github.com/repos/pypi-data/pypi-json-data/releases/latest | \
@@ -19,6 +26,7 @@ simplify_sqlite:
 	sqlite3 pypi_data.sqlite > one_row_per_package_for_sqlite.log < one_row_per_package_for_sqlite.sql
 	# we don't need this url table
 	sqlite3 pypi_data.sqlite "DROP TABLE urls;"
+	# not sure if we really need this
 	sqlite3 pypi_data.sqlite "VACUUM;"
 
 
@@ -46,8 +54,8 @@ sqlite_to_dolt: reset_dolt
 	# quit dolt server
 	kill $DOLT_PID
 
-	dolt add projects
-	dolt commit
-
-mysql_indexes:
 	dolt sql < mysql_indexes.sql
+
+	dolt add projects
+	dolt commit -m "pypi update"
+	dolt push --force origin main

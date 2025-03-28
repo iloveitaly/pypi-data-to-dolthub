@@ -1,0 +1,19 @@
+name: Update Dolthub Database
+on:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  # required otherwise github api calls are rate limited
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: just setup
+      - run: just
