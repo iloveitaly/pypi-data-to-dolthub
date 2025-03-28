@@ -1,0 +1,7 @@
+# dolt stuff
+.dolt*
+config.yaml
+
+pypi_data.sqlite
+
+.sqlhistory

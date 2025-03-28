@@ -37,7 +37,7 @@ sqlite_to_dolt: reset_dolt
 
 	# Import SQLite to Dolt using sqlite3-to-mysql
 	sqlite3mysql --sqlite-file pypi_data.sqlite \
-			--mysql-database pypi_data \
+			--mysql-database $(basename $PWD) \
 			--mysql-user root \
 			--mysql-password "" \
 			--mysql-host localhost \
@@ -45,3 +45,9 @@ sqlite_to_dolt: reset_dolt
 
 	# quit dolt server
 	kill $DOLT_PID
+
+	dolt add projects
+	dolt commit
+
+mysql_indexes:
+	dolt sql < mysql_indexes.sql
