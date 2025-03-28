@@ -16,4 +16,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
       - run: just setup
-      - run: just
+      - run: just update_dolt
