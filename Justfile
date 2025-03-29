@@ -19,7 +19,6 @@ download_latest_sqlite:
 			cut -d'"' -f4) && \
 	curl -L -o pypi_data.sqlite.gz "$LATEST_URL"
 	gunzip pypi_data.sqlite.gz
-	rm pypi_data.sqlite.gz
 
 simplify_sqlite:
 	# by default, the database contains all versions from all time
