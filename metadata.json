@@ -1,0 +1,5 @@
+{
+  "description": "Automatically update a Dolt Database with PyPI data. This enables pypi data to be searched via a simple API.",
+  "homepage": "https://github.com/iloveitaly/pypi-data-to-dolthub",
+  "keywords": ["pypi", "dolt", "sqlite", "mysql", "data-import", "automation"]
+}
