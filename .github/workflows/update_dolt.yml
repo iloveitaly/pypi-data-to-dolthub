@@ -20,7 +20,7 @@ jobs:
       # https://github.com/dolthub/dolt-action
       # the easiest way to a jwt is to look at ~/.dolt/creds/ and copy the jwt in the directory
       - run: |
-          dolt config --global --set user.creds "${{ secrets.DOLTHUB_TOKEN }}"
+          echo "${{ secrets.DOLTHUB_TOKEN }}" | dolt creds import
           dolt config --global --set user.email "mike@mikebian.co"
           dolt config --global --set user.name "Michael Bianco"
 
