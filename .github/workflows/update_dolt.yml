@@ -29,3 +29,12 @@ jobs:
           dolt config --global --set user.name "Michael Bianco"
 
       - run: just update_dolt
+
+  # https://github.com/gautamkrishnar/keepalive-workflow
+  keepalive-job:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gautamkrishnar/keepalive-workflow@v2
