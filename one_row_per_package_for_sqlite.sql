@@ -1,4 +1,4 @@
--- Create a new table with the query results, excluding row_num
+-- Create a new table with the query results, including row_num temporarily
 CREATE TABLE projects_new AS
 WITH ranked_projects AS (
     SELECT *,
@@ -35,7 +35,7 @@ WITH ranked_projects AS (
                                               INSTR(SUBSTR(version || '..', INSTR(version, '.') + 1), '.') + 1), '.') > 0 THEN
                                SUBSTR(
                                    SUBSTR(SUBSTR(version || '..', INSTR(version, '.') + 1) || '..', 
-                                          INSTR(SUBSTR(version || '..', INSTR(version,.') + 1), '.') + 1),
+                                          INSTR(SUBSTR(version || '..', INSTR(version, '.') + 1), '.') + 1),
                                    INSTR(SUBSTR(SUBSTR(version || '..', INSTR(version, '.') + 1) || '..', 
                                                  INSTR(SUBSTR(version || '..', INSTR(version, '.') + 1), '.') + 1), '.') + 1,
                                    INSTR(SUBSTR(SUBSTR(SUBSTR(version || '..', INSTR(version, '.') + 1) || '..', 
@@ -50,11 +50,12 @@ WITH ranked_projects AS (
            ) AS row_num
     FROM projects
 )
-SELECT id, name, version, author, author_email, home_page, license, maintainer, 
-       maintainer_email, package_url, platform, project_url, requires_python, 
-       summary, yanked, yanked_reason, classifiers, requires_dist
+SELECT * 
 FROM ranked_projects 
 WHERE row_num = 1;
+
+-- Remove the row_num column from the new table
+ALTER TABLE projects_new DROP COLUMN row_num;
 
 -- Drop the original projects table
 DROP TABLE projects;
