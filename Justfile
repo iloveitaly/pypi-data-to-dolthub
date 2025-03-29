@@ -19,6 +19,7 @@ download_latest_sqlite:
 			cut -d'"' -f4) && \
 	curl -L -o pypi_data.sqlite.gz "$LATEST_URL"
 	gunzip pypi_data.sqlite.gz
+	rm pypi_data.sqlite.gz
 
 simplify_sqlite:
 	# by default, the database contains all versions from all time
@@ -50,6 +51,8 @@ sqlite_to_dolt: reset_dolt
 			--mysql-password "" \
 			--mysql-host localhost \
 			--mysql-port 3306
+
+	rm pypi_data.sqlite
 
 	# quit dolt server
 	kill $DOLT_PID
