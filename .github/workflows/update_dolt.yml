@@ -17,8 +17,8 @@ jobs:
       - uses: jdx/mise-action@v2
       - run: just setup
       - run: |
-          dolt --global --set user.creds = ${{ secrets.DOLTHUB_TOKEN }}
-          dolt --global --set user.email = mike@mikebian.co
-          dolt --global --set user.name = Michael Bianco
+          dolt config --global --set user.creds = ${{ secrets.DOLTHUB_TOKEN }}
+          dolt config --global --set user.email = mike@mikebian.co
+          dolt config --global --set user.name = Michael Bianco
 
       - run: just update_dolt
