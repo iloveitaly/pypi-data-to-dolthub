@@ -61,6 +61,8 @@ sqlite_to_dolt: reset_dolt
 
 	dolt sql < mysql_indexes.sql
 
+	dolt docs upload README.md README.md
+
 	dolt add projects
 	dolt commit -m "pypi update"
 	dolt push --force origin main

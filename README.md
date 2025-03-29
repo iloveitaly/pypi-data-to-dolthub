@@ -1,18 +1,12 @@
 # PyPI Data to DoltHub
 
-A tool to download, process, and publish PyPI package data to a DoltHub repository.
+[This repo](https://github.com/iloveitaly/pypi-data-to-dolthub) uses GitHub actions to download, process, and publish PyPI package data to a DoltHub repository.
+
+The processed data is available on DoltHub at [iloveitaly/pypi](https://www.dolthub.com/repositories/iloveitaly/pypi).
 
 ## Overview
 
 This project downloads the latest SQLite database from the [pypi-data/pypi-json-data](https://github.com/pypi-data/pypi-json-data) repository, processes it to keep only the latest version of each package, and publishes the resulting data to DoltHub.
-
-## Prerequisites
-
-- [Dolt](https://github.com/dolthub/dolt)
-- [Just](https://github.com/casey/just)
-- Python with pip
-- sqlite3
-- sqlite3-to-mysql Python package
 
 ## Setup
 
@@ -88,7 +82,3 @@ The resulting database contains a single `projects` table with detailed informat
 - Dependencies
 - Project URLs
 - And more metadata
-
-## Repository
-
-The processed data is available on DoltHub at [iloveitaly/pypi](https://www.dolthub.com/repositories/iloveitaly/pypi).
