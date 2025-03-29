@@ -16,4 +16,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
       - run: just setup
+      - run: |
+          dolt --global --set user.creds = ${{ secrets.DOLTHUB_TOKEN }}
+          dolt --global --set user.email = mike@mikebian.co
+          dolt --global --set user.name = Michael Bianco
+
       - run: just update_dolt
