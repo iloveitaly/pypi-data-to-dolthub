@@ -21,12 +21,14 @@ download_latest_sqlite:
 	gunzip pypi_data.sqlite.gz
 
 simplify_sqlite:
-	# by default, the database contains all versions from all time
-	# we really only care about the latest version
+	# by default, the database contains all versions from all time, but we really only care about the latest version.
+	# this reduces the DB to have a single row per package.
 	sqlite3 pypi_data.sqlite > one_row_per_package_for_sqlite.log < one_row_per_package_for_sqlite.sql
+
 	# we don't need this url table
 	sqlite3 pypi_data.sqlite "DROP TABLE urls;"
-	# not sure if we really need this
+
+	# if we want to push a slimmed version of the sqlitedb in the future, this is helpful
 	sqlite3 pypi_data.sqlite "VACUUM;"
 
 
@@ -37,6 +39,7 @@ reset_dolt:
 
 [script]
 sqlite_to_dolt: reset_dolt
+	# these are the defaults, but let's make them explicit since we are using them in sqlite3mysql
 	dolt sql-server --host 0.0.0.0 --port 3306 &
 	DOLT_PID=$!
 

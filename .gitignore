@@ -5,3 +5,5 @@ config.yaml
 pypi_data.sqlite
 
 .sqlhistory
+
+*.log
