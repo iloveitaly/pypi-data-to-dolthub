@@ -15,7 +15,7 @@ update_dolt: download_latest_sqlite simplify_sqlite sqlite_to_dolt
 
 download_latest_sqlite:
 	LATEST_URL=$(curl -s https://api.github.com/repos/pypi-data/pypi-json-data/releases/latest | \
-			jq -r '.assets[] | .browser_download_url' && \
+			jq -r '.assets[] | .browser_download_url') && \
 	curl -L -o pypi_data.sqlite.gz "$LATEST_URL"	gunzip pypi_data.sqlite.gz
 
 simplify_sqlite:
