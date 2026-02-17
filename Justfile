@@ -11,24 +11,11 @@ setup:
 
 	pip install sqlite3-to-mysql
 
-update_dolt: download_latest_sqlite simplify_sqlite sqlite_to_dolt
+update_dolt: build_sqlite sqlite_to_dolt
 
-download_latest_sqlite:
-	LATEST_URL=$(curl -s https://api.github.com/repos/pypi-data/pypi-json-data/releases/latest | \
-			jq -r '.assets[] | .browser_download_url') && \
-	curl -L -o pypi_data.sqlite.gz "$LATEST_URL" && \
-	gunzip pypi_data.sqlite.gz
-
-simplify_sqlite:
-	# by default, the database contains all versions from all time, but we really only care about the latest version.
-	# this reduces the DB to have a single row per package.
-	sqlite3 pypi_data.sqlite > one_row_per_package_for_sqlite.log < one_row_per_package_for_sqlite.sql
-
-	# we don't need this url table
-	sqlite3 pypi_data.sqlite "DROP TABLE urls;"
-
-	# if we want to push a slimmed version of the sqlitedb in the future, this is helpful
-	sqlite3 pypi_data.sqlite "VACUUM;"
+build_sqlite:
+	# Build the sqlite db using duckdb (reads directly from GH via httpfs)
+	duckdb < build_latest_sqlite.sql
 
 
 reset_dolt:
