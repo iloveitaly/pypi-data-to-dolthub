@@ -1,15 +1,10 @@
-INSTALL httpfs;
-LOAD httpfs;
 SET enable_progress_bar = true;
 SET preserve_insertion_order = false;
 
 -- Increase memory limit if possible, standard runners have ~7GB
 SET max_memory = '6GB';
 
--- Create projects table directly from remote JSON files
--- We use the GH raw URL pattern. Note that DuckDB supports globbing over HTTP.
--- However, globbing hundreds of thousands of files over HTTP might be slow.
--- We'll try to use the same logic but pointing to the raw content.
+-- Create projects table directly from local JSON files
 CREATE TABLE projects AS
 WITH all_versions AS (
     SELECT
@@ -34,7 +29,7 @@ WITH all_versions AS (
         SELECT
             unnest(map_keys(json)) as version,
             unnest(map_values(json)) as release
-        FROM read_json('https://raw.githubusercontent.com/pypi-data/pypi-json-data/main/release_data/*/*/*.json',
+        FROM read_json('pypi_json_data/release_data/*/*/*.json',
             columns = {json: 'MAP(VARCHAR, JSON)'},
             maximum_object_size = 100000000
         )

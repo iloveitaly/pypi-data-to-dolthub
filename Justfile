@@ -14,8 +14,16 @@ setup:
 update_dolt: build_sqlite sqlite_to_dolt
 
 build_sqlite:
-	# Build the sqlite db using duckdb (reads directly from GH via httpfs)
+	# Clone the raw data repository (shallow and sparse)
+	rm -rf pypi_json_data || true
+	# blob:none filter avoids downloading all file contents initially
+	git clone --depth 1 --filter=blob:none --sparse https://github.com/pypi-data/pypi-json-data pypi_json_data
+	cd pypi_json_data && git sparse-checkout set release_data
+
+	# Build the sqlite db using duckdb (points to local files)
 	duckdb < build_latest_sqlite.sql
+
+	rm -rf pypi_json_data
 
 
 reset_dolt:
