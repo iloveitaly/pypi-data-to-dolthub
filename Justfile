@@ -21,9 +21,10 @@ build_sqlite:
 	cd pypi_json_data && git sparse-checkout set release_data
 
 	# Build the sqlite db using duckdb (points to local files)
+	mkdir -p duckdb_temp
 	duckdb < build_latest_sqlite.sql
 
-	rm -rf pypi_json_data
+	rm -rf pypi_json_data duckdb_temp
 
 
 reset_dolt:
