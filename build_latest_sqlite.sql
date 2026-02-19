@@ -11,11 +11,9 @@ WITH releases AS (
         release->>'$.info.name' as name,
         version,
         release,
-        -- Extract the latest upload time from the urls array to use for ordering
-        -- We handle cases where urls might be empty by using a very old date
+        -- Extract the latest upload time from the urls array using working list comprehension
         COALESCE(
-            (SELECT max(u.upload_time_iso_8601) 
-             FROM unnest(from_json(release->'$.urls', '[{"upload_time_iso_8601": "VARCHAR"}]')) as t(u)),
+            list_max([u.upload_time_iso_8601 FOR u IN from_json(release->'$.urls', '[{"upload_time_iso_8601": "VARCHAR"}]')]),
             '1970-01-01T00:00:00Z'
         ) as latest_upload_time
     FROM (
