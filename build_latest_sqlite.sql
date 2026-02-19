@@ -1,17 +1,17 @@
--- Use disk-based spilling for larger-than-memory datasets
+-- DuckDB requires disk-spilling to aggregate 700k+ JSON files within standard runner RAM constraints
 SET temp_directory = './duckdb_temp';
 SET max_memory = '12GB';
 SET enable_progress_bar = true;
 SET preserve_insertion_order = false;
 
--- Create projects table by extracting the latest version per package based on upload time
+-- Creating projects table by identifying the latest release per package
 CREATE TABLE projects AS
 WITH releases AS (
     SELECT
         release->>'$.info.name' as name,
         version,
         release,
-        -- Extract the latest upload time from the urls array using working list comprehension
+        -- Determining latest version via upload time; semver string sorting is unreliable (e.g. 0.0.9 > 0.0.34)
         COALESCE(
             list_max([u.upload_time_iso_8601 FOR u IN from_json(release->'$.urls', '[{"upload_time_iso_8601": "VARCHAR"}]')]),
             '1970-01-01T00:00:00Z'
@@ -26,6 +26,7 @@ WITH releases AS (
         )
     )
 )
+-- Use arg_max to select the specific row corresponding to the newest upload_time for each package
 SELECT
     arg_max(name, latest_upload_time) as name,
     arg_max(version, latest_upload_time) as version,

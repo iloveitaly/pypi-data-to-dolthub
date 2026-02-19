@@ -14,13 +14,16 @@ setup:
 update_dolt: build_sqlite sqlite_to_dolt
 
 build_sqlite:
-	# Clone the raw data repository (shallow and sparse)
+	# Bypassing upstream stale release assets by cloning raw JSON data directly from main branch
 	rm -rf pypi_json_data || true
-	# blob:none filter avoids downloading all file contents initially
+	
+	# --filter=blob:none + --sparse avoids downloading 700k+ file contents initially to stay within runner limits
 	git clone --depth 1 --filter=blob:none --sparse https://github.com/pypi-data/pypi-json-data pypi_json_data
+	
+	# Only materializing the release_data directory to keep the local filesystem manageable
 	cd pypi_json_data && git sparse-checkout set release_data
 
-	# Build the sqlite db using duckdb (points to local files)
+	# Aggregating 700k+ files via DuckDB; requires local temp space for disk-spilling
 	mkdir -p duckdb_temp
 	duckdb < build_latest_sqlite.sql
 

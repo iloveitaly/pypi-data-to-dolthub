@@ -19,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Free Disk Space (Ubuntu)
+        # Reclaiming ~30GB is critical for the sparse-checkout of 700k+ files and DuckDB disk-spilling
         uses: jlumbroso/free-disk-space@main
         with:
           # this might remove tools that are actually needed,
