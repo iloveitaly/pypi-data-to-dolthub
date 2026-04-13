@@ -18,6 +18,9 @@ env:
 jobs:
   update_dolt:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - name: Free Disk Space (Ubuntu)
