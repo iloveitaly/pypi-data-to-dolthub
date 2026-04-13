@@ -12,6 +12,7 @@ on:
 env:
   # required otherwise github api calls are rate limited
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
 
 jobs:
   update_dolt:
@@ -33,6 +34,10 @@ jobs:
           large-packages: true
           docker-images: true
           swap-storage: true
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
       - uses: jdx/mise-action@v2
       - run: just setup
       # https://github.com/dolthub/dolt-action
@@ -43,6 +48,18 @@ jobs:
           dolt config --global --set user.name "Michael Bianco"
 
       - run: just update_dolt
+
+      - name: Gzip and Upload Release Asset
+        run: |
+          gzip -c pypi_data.sqlite > pypi_data.sqlite.gz
+        
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          files: pypi_data.sqlite.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # https://github.com/gautamkrishnar/keepalive-workflow
   workflow-keepalive:

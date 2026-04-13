@@ -9,25 +9,19 @@ setup:
 		sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | sudo bash'; \
 	fi
 
-	pip install sqlite3-to-mysql
+	pip install sqlite3-to-mysql google-cloud-bigquery pyarrow pandas db-dtypes
 
 update_dolt: build_sqlite sqlite_to_dolt
 
 build_sqlite:
-	# Bypassing upstream stale release assets by cloning raw JSON data directly from main branch
-	rm -rf pypi_json_data || true
-	
-	# --filter=blob:none + --sparse avoids downloading 700k+ file contents initially to stay within runner limits
-	git clone --depth 1 --filter=blob:none --sparse https://github.com/pypi-data/pypi-json-data pypi_json_data
-	
-	# Only materializing the release_data directory to keep the local filesystem manageable
-	cd pypi_json_data && git sparse-checkout set release_data
+	# Fetching latest PyPI metadata from Google BigQuery
+	python fetch_pypi_data.py
 
-	# Aggregating 700k+ files via DuckDB; requires local temp space for disk-spilling
+	# Aggregating data via DuckDB; requires local temp space for disk-spilling
 	mkdir -p duckdb_temp
 	duckdb < build_latest_sqlite.sql
 
-	rm -rf pypi_json_data duckdb_temp
+	rm -rf duckdb_temp pypi_metadata.parquet
 
 
 reset_dolt:
@@ -52,12 +46,12 @@ sqlite_to_dolt: reset_dolt
 			--mysql-host localhost \
 			--mysql-port 3306
 
-	rm pypi_data.sqlite
-
 	# quit dolt server
 	kill $DOLT_PID
 
+	# Add indexes to both Dolt and the SQLite file
 	dolt sql < mysql_indexes.sql
+	sqlite3 pypi_data.sqlite "CREATE INDEX IF NOT EXISTS idx_name ON projects (name);"
 
 	dolt docs upload README.md README.md
 	dolt add dolt_docs

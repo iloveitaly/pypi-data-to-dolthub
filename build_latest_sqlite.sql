@@ -1,53 +1,39 @@
--- DuckDB requires disk-spilling to aggregate 700k+ JSON files within standard runner RAM constraints
+-- DuckDB configuration for efficient processing
 SET temp_directory = './duckdb_temp';
 SET max_memory = '12GB';
 SET enable_progress_bar = true;
 SET preserve_insertion_order = false;
 
--- Creating projects table by identifying the latest release per package
+-- Create projects table from BigQuery export
 CREATE TABLE projects AS
-WITH releases AS (
-    SELECT
-        release->>'$.info.name' as name,
-        version,
-        release,
-        -- Determining latest version via upload time; semver string sorting is unreliable (e.g. 0.0.9 > 0.0.34)
-        COALESCE(
-            list_max([u.upload_time_iso_8601 FOR u IN from_json(release->'$.urls', '[{"upload_time_iso_8601": "VARCHAR"}]')]),
-            '1970-01-01T00:00:00Z'
-        ) as latest_upload_time
-    FROM (
-        SELECT
-            unnest(map_keys(json)) as version,
-            unnest(map_values(json)) as release
-        FROM read_json('pypi_json_data/release_data/*/*/*.json',
-            columns = {json: 'MAP(VARCHAR, JSON)'},
-            maximum_object_size = 100000000
-        )
-    )
-)
--- Use arg_max to select the specific row corresponding to the newest upload_time for each package
 SELECT
-    arg_max(name, latest_upload_time) as name,
-    arg_max(version, latest_upload_time) as version,
-    arg_max(release->>'$.info.author', latest_upload_time) as author,
-    arg_max(release->>'$.info.author_email', latest_upload_time) as author_email,
-    arg_max(release->>'$.info.home_page', latest_upload_time) as home_page,
-    arg_max(release->>'$.info.license', latest_upload_time) as license,
-    arg_max(release->>'$.info.maintainer', latest_upload_time) as maintainer,
-    arg_max(release->>'$.info.maintainer_email', latest_upload_time) as maintainer_email,
-    arg_max(release->>'$.info.package_url', latest_upload_time) as package_url,
-    arg_max(release->>'$.info.platform', latest_upload_time) as platform,
-    arg_max(release->>'$.info.project_url', latest_upload_time) as project_url,
-    arg_max(release->>'$.info.requires_python', latest_upload_time) as requires_python,
-    arg_max(release->>'$.info.summary', latest_upload_time) as summary,
-    (arg_max(release->>'$.info.yanked', latest_upload_time))::BOOLEAN as yanked,
-    arg_max(release->>'$.info.yanked_reason', latest_upload_time) as yanked_reason,
-    from_json(arg_max(release->'$.info.classifiers', latest_upload_time), '["VARCHAR"]') as classifiers,
-    from_json(arg_max(release->'$.info.requires_dist', latest_upload_time), '["VARCHAR"]') as requires_dist
-FROM releases
-GROUP BY name;
+    -- id column is expected by the previous schema (though it was nullable)
+    NULL::INT as id,
+    name,
+    version,
+    author,
+    author_email,
+    home_page,
+    license,
+    maintainer,
+    maintainer_email,
+    'https://pypi.org/project/' || name || '/' || version || '/' as package_url,
+    -- BigQuery distribution_metadata has a platform field but it's often file-specific.
+    -- The original schema included this, so we'll keep it as null or extract it if needed.
+    NULL::VARCHAR as platform,
+    'https://pypi.org/project/' || name || '/' as project_url,
+    requires_python,
+    summary,
+    upload_time,
+    -- BigQuery doesn't easily expose yanked status in the public distribution_metadata table
+    0 as yanked,
+    NULL::VARCHAR as yanked_reason,
+    -- Convert LISTs from Parquet to JSON strings to match the Dolt 'text' schema
+    to_json(classifiers)::VARCHAR as classifiers,
+    to_json(requires_dist)::VARCHAR as requires_dist
+FROM read_parquet('pypi_metadata.parquet');
 
+-- Export to SQLite
 INSTALL sqlite;
 LOAD sqlite;
 ATTACH 'pypi_data.sqlite' AS sqlite_db (TYPE sqlite);

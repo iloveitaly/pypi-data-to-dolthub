@@ -7,3 +7,6 @@ pypi_data.sqlite
 .sqlhistory
 
 *.log
+*.parquet
+duckdb_temp/
+.DS_Store
