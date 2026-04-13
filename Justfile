@@ -48,6 +48,7 @@ sqlite_to_dolt: reset_dolt
 
 	# quit dolt server
 	kill $DOLT_PID
+	sleep 5
 
 	# Add indexes to both Dolt and the SQLite file
 	dolt sql < mysql_indexes.sql
