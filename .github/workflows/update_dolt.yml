@@ -8,6 +8,7 @@ on:
   schedule:
     # Run daily at midnight UTC
     - cron: "0 0 * * *"
+  workflow_dispatch:
 
 env:
   # required otherwise github api calls are rate limited
