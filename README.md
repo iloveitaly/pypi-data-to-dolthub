@@ -6,7 +6,10 @@ The processed data is available on DoltHub at [iloveitaly/pypi](https://www.dolt
 
 ## Overview
 
-This project fetches the latest PyPI package metadata from the [Google BigQuery PyPI Public Dataset](https://console.cloud.google.com/marketplace/details/google_pypi/pypi), processes it to keep only the latest version of each package, and publishes the resulting data to DoltHub.
+This project fetches the latest PyPI package metadata from the [Google BigQuery PyPI Public Dataset](https://console.cloud.google.com/marketplace/details/google_pypi/pypi), processes it to keep only the latest version of each package, and publishes the resulting data to:
+
+1. **DoltHub**: Available at [iloveitaly/pypi](https://www.dolthub.com/repositories/iloveitaly/pypi).
+2. **GitHub Releases**: A standalone SQLite database is uploaded as a `latest` release asset.
 
 ## Setup
 
@@ -82,39 +85,37 @@ This command performs the following steps:
 4. **Import SQLite data into Dolt**:
    - Starts a temporary Dolt SQL server
    - Imports data using sqlite3-to-mysql
-   - Adds indexes to improve query performance
-   - Commits and pushes the changes to the DoltHub repository
+   - Adds indexes to both the Dolt database and the local SQLite file
+   - Commits and pushes the changes to DoltHub
+
+5. **Publish SQLite Release**:
+   - Gzips the indexed `pypi_data.sqlite`
+   - Uploads it to the `latest` GitHub Release for easy download.
 
 ## SQL Operations
 
 ### Package Selection Logic
 
-The script selects only the latest version of each package using a sophisticated version comparison algorithm in SQL. This handles semantic versioning correctly by:
-
-1. Comparing the major version number
-2. Comparing the minor version number
-3. Comparing the patch version number
-4. Comparing the build number (if any)
+The script identifies the latest version of every package using BigQuery's `upload_time`. By using a window function (`ROW_NUMBER() OVER(PARTITION BY name ORDER BY upload_time DESC)`), we ensure we always capture the most recently published version, bypassing the complexities and inconsistencies of semantic version string sorting.
 
 ### Indexing
 
-After importing to Dolt, the following index is created:
-
-```sql
-CREATE INDEX idx_name_prefix ON projects (name (20));
-```
-
-This index improves query performance by indexing the first 20 characters of package names.
+After processing, the following indexes are created to ensure fast lookups:
+- **Dolt**: `idx_name_prefix` on the first 20 characters of `name`.
+- **SQLite**: `idx_name` on the `name` column.
 
 ## Database Structure
 
 The resulting database contains a single `projects` table with detailed information about each Python package, including:
 
-- Package name
-- Latest version
-- Summary
-- License
-- Author information
-- Dependencies
-- Project URLs
-- And more metadata
+- `name`: Package name
+- `version`: Latest version string
+- `upload_time`: Timestamp of the latest release
+- `summary`: Package summary
+- `license`: License information
+- `author` / `author_email`: Author contact info
+- `maintainer` / `maintainer_email`: Maintainer contact info
+- `requires_python`: Python version requirements
+- `requires_dist`: JSON array of dependencies
+- `classifiers`: JSON array of PyPI classifiers
+- `project_url` / `package_url`: Direct links to PyPI
