@@ -10,7 +10,7 @@ This project fetches the latest PyPI package metadata from the [Google BigQuery 
 
 1. **DoltHub**: Available at [iloveitaly/pypi](https://www.dolthub.com/repositories/iloveitaly/pypi).
 2. **GitHub Releases**: A standalone indexed SQLite database (`pypi_data.sqlite.gz`) and snapshot metadata are uploaded as a `latest` release asset.
-3. **GitHub Container Registry**: A self-contained, high-performance FastAPI search API container at `ghcr.io/iloveitaly/pypi-data-to-dolthub:latest`.
+3. **GitHub Container Registry**: A self-contained, high-performance FastAPI search API container at `ghcr.io/iloveitaly/pypi-api:latest`.
 
 ## Setup
 
@@ -110,7 +110,45 @@ After processing, the following indexes are created to ensure fast lookups:
 
 ## API Server
 
-The repository bundles a lightweight, read-only FastAPI service under `server/` to serve search queries with measured sub-10ms warm latencies on the complete ~1.1 GB dataset. See [server/README.md](server/README.md) for full endpoint specifications, benchmark measurements, local development recipes, and Docker deployment instructions.
+The repository bundles a lightweight, read-only FastAPI service under `server/` to serve search queries with measured sub-10ms warm latencies on the complete ~1.1 GB dataset. See [server/README.md](server/README.md) for full endpoint specifications, benchmark measurements, and local development recipes.
+
+### Quick Start
+
+Run directly with `docker run`:
+
+```bash
+docker run -d -p 8000:8000 --restart unless-stopped ghcr.io/iloveitaly/pypi-api:latest
+```
+
+Or using Docker Compose:
+
+```yaml
+services:
+  api:
+    image: ghcr.io/iloveitaly/pypi-api:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+```
+
+```bash
+docker compose up -d
+```
+
+Query the API:
+
+```bash
+curl http://localhost:8000/health
+curl "http://localhost:8000/search?q=requests"
+```
 
 ## Database Structure
 

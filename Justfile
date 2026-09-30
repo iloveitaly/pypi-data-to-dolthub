@@ -100,7 +100,7 @@ smoke_test *args:
 # Build docker image for the API server (bundles selected root snapshot first)
 docker src_db="pypi_data.sqlite": (bundle_snapshot "--source-db" src_db "--dest-dir" "server")
 	cd server && railpack build .
-	docker tag server:latest pypi-data-to-dolthub:latest
+	docker tag server:latest pypi-api:latest
 
 # Start container with healthcheck and wait for readiness
 docker_up port="8000":

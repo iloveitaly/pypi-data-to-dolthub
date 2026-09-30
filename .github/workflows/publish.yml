@@ -124,7 +124,7 @@ jobs:
       - name: Determine Image Tags
         id: tags
         run: |
-          IMAGE_BASE="ghcr.io/${{ github.repository }}"
+          IMAGE_BASE="ghcr.io/${{ github.repository_owner }}/pypi-api"
           CANDIDATE_TAG="${IMAGE_BASE}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"
           LATEST_TAG="${IMAGE_BASE}:latest"
           echo "candidate_tag=${CANDIDATE_TAG}" >> $GITHUB_OUTPUT

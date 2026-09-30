@@ -1,6 +1,6 @@
 services:
   api:
-    image: ${IMAGE:-pypi-data-to-dolthub:latest}
+    image: ${IMAGE:-pypi-api:latest}
     platform: ${PLATFORM:-}
     ports:
       - "${PORT:-8000}:${PORT:-8000}"

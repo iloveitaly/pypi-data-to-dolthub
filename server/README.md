@@ -107,24 +107,52 @@ uv run python benchmark_search.py --iterations 30 --concurrency 5
 
 ## Docker & Container Registry (GHCR)
 
-Published to GitHub Container Registry: `ghcr.io/iloveitaly/pypi-data-to-dolthub`.
+Published to GitHub Container Registry: `ghcr.io/iloveitaly/pypi-api`.
 
-### Pull and Run
+### One-Liner (`docker run`)
 ```bash
-docker pull ghcr.io/iloveitaly/pypi-data-to-dolthub:latest
-docker run -d -p 8000:8000 --name pypi-api ghcr.io/iloveitaly/pypi-data-to-dolthub:latest
+docker run -d -p 8000:8000 --restart unless-stopped ghcr.io/iloveitaly/pypi-api:latest
+```
+
+### Docker Compose
+
+To host locally with Docker Compose:
+
+```yaml
+services:
+  api:
+    image: ghcr.io/iloveitaly/pypi-api:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+```
+
+Start the service:
+
+```bash
+docker compose up -d
+curl http://localhost:8000/health
+curl "http://localhost:8000/search?q=requests"
 ```
 
 ### Run on Custom Port
 ```bash
-docker run -d -e PORT=8080 -p 8080:8080 ghcr.io/iloveitaly/pypi-data-to-dolthub:latest
+docker run -d -e PORT=8080 -p 8080:8080 ghcr.io/iloveitaly/pypi-api:latest
 ```
 
 ### Rollback by Digest
 Each release tags images by candidate tag `sha-run_id-run_attempt` and digest. To pin or roll back to a specific image digest:
 ```bash
-docker pull ghcr.io/iloveitaly/pypi-data-to-dolthub@sha256:<IMAGE_SHA256>
-docker run -d -p 8000:8000 ghcr.io/iloveitaly/pypi-data-to-dolthub@sha256:<IMAGE_SHA256>
+docker pull ghcr.io/iloveitaly/pypi-api@sha256:<IMAGE_SHA256>
+docker run -d -p 8000:8000 ghcr.io/iloveitaly/pypi-api@sha256:<IMAGE_SHA256>
 ```
 
 ---
