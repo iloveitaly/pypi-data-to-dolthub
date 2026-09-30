@@ -35,7 +35,7 @@ jobs:
         id: smoke
         run: |
           IMAGE=pypi-api-test:local PLATFORM=linux/amd64 PORT=8080 docker compose up -d --wait
-          just smoke_test port="8080" arch="x86_64" db_path="server/pypi_data.sqlite"
+          just smoke_test --port 8080 --expected-arch x86_64 --db-path server/pypi_data.sqlite
 
       - name: Capture Container Logs on Failure
         if: failure() && steps.smoke.outcome == 'failure'

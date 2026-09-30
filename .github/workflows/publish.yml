@@ -72,11 +72,11 @@ jobs:
       - name: Prepare Snapshot
         id: prepare
         run: |
-          REFRESH="false"
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.refresh_data }}" = "true" ]; then
-            REFRESH="true"
+            just prepare_snapshot --refresh
+          else
+            just prepare_snapshot
           fi
-          just prepare_snapshot refresh="$REFRESH"
 
       - name: Validate Prepared Snapshot
         run: just validate_snapshot
@@ -147,7 +147,7 @@ jobs:
           IMAGE=${{ steps.tags.outputs.candidate_tag }} PLATFORM=linux/amd64 PORT=8081 docker compose up -d --wait
           CONTAINER_ARCH=$(docker compose exec api uname -m 2>/dev/null || docker inspect $(docker compose ps -q api) --format '{{.Architecture}}')
           echo "Verified container architecture: ${CONTAINER_ARCH}"
-          just smoke_test port="8081" arch="x86_64" db_path="server/pypi_data.sqlite"
+          just smoke_test --port 8081 --expected-arch x86_64 --db-path server/pypi_data.sqlite
 
       - name: Capture AMD64 Logs on Failure
         if: failure() && steps.smoke_amd64.outcome == 'failure'
@@ -165,7 +165,7 @@ jobs:
           IMAGE=${{ steps.tags.outputs.candidate_tag }} PLATFORM=linux/arm64 PORT=8082 docker compose up -d --wait
           CONTAINER_ARCH=$(docker compose exec api uname -m 2>/dev/null || docker inspect $(docker compose ps -q api) --format '{{.Architecture}}')
           echo "Verified container architecture: ${CONTAINER_ARCH}"
-          just smoke_test port="8082" arch="aarch64" db_path="server/pypi_data.sqlite"
+          just smoke_test --port 8082 --expected-arch aarch64 --db-path server/pypi_data.sqlite
 
       - name: Capture ARM64 Logs on Failure
         if: failure() && steps.smoke_arm64.outcome == 'failure'

@@ -11,11 +11,11 @@ setup_dolt:
 		sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | sudo bash'; \
 	fi
 
-update_dolt: (build_db "true") sqlite_to_dolt
+update_dolt: build_db sqlite_to_dolt
 
 # Prepare snapshot from BigQuery (or download latest release)
-prepare_snapshot refresh="false":
-	scripts/prepare_snapshot.py {{ if refresh == "true" { "--refresh" } else { "" } }}
+prepare_snapshot *args:
+	scripts/prepare_snapshot.py {{args}}
 
 # Decompress and validate prepared snapshot integrity against metadata
 validate_snapshot gz="pypi_data.sqlite.gz" meta="pypi_data.sqlite.meta.json":
@@ -24,13 +24,13 @@ validate_snapshot gz="pypi_data.sqlite.gz" meta="pypi_data.sqlite.meta.json":
 	rm tmp_validate.sqlite
 
 # Bundle verified snapshot into server build context
-bundle_snapshot src_db="pypi_data.sqlite" dest_dir="server":
-	scripts/bundle_snapshot.py --source-db {{src_db}} --dest-dir {{dest_dir}}
+bundle_snapshot *args:
+	scripts/bundle_snapshot.py {{args}}
 
 # Build, index, validate, and bundle the SQLite database snapshot
-build_db refresh="true": (prepare_snapshot refresh) (bundle_snapshot "pypi_data.sqlite" "server")
+build_db: (prepare_snapshot "--refresh") (bundle_snapshot "--source-db" "pypi_data.sqlite" "--dest-dir" "server")
 
-build_sqlite: (build_db "true")
+build_sqlite: build_db
 
 # Generate a fixture SQLite database for local development and testing
 fixture_db:
@@ -94,11 +94,11 @@ benchmark iterations="30" concurrency="5":
 	cd server && uv run python benchmark_search.py --iterations {{iterations}} --concurrency {{concurrency}}
 
 # Run container smoke test against running instance
-smoke_test port="8000" sqlite_version="3.53.1" arch="" db_path="":
-	scripts/smoke_test.py --port {{port}} --expected-sqlite-version {{sqlite_version}} {{ if arch != "" { "--expected-arch " + arch } else { "" } }} {{ if db_path != "" { "--db-path " + db_path } else { "" } }}
+smoke_test *args:
+	scripts/smoke_test.py {{args}}
 
 # Build docker image for the API server (bundles selected root snapshot first)
-docker src_db="pypi_data.sqlite": (bundle_snapshot src_db "server")
+docker src_db="pypi_data.sqlite": (bundle_snapshot "--source-db" src_db "--dest-dir" "server")
 	cd server && railpack build .
 	docker tag server:latest pypi-data-to-dolthub:latest
 
@@ -113,7 +113,7 @@ docker_down:
 # Start container, smoke test endpoints, capture logs on failure, and clean up
 test_container port="8080":
 	PORT={{port}} docker compose up -d --wait || (docker compose logs && exit 1)
-	just smoke_test port="{{port}}" || (docker compose logs && just docker_down && exit 1)
+	just smoke_test --port {{port}} || (docker compose logs && just docker_down && exit 1)
 	just docker_down
 
 # Start the FastAPI server locally for development with auto-reload
