@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test_and_smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+        with:
+          bootstrap: true
+          bootstrap_args: --update --yes
+
+      - name: Lint and Format Check
+        run: just lint
+
+      - name: Generate and Bundle Fixture Database
+        run: just fixture_db
+
+      - name: Run Test Suite
+        run: just test
+
+      - name: Build Local Container Image with Railpack
+        uses: iloveitaly/github-action-railpack@f4c3d22446c5bda92261727f3dbb352eadeab7a3
+        with:
+          context: server
+          tags: pypi-api-test:local
+          push: false
+
+      - name: Container Smoke Test
+        id: smoke
+        run: |
+          IMAGE=pypi-api-test:local PLATFORM=linux/amd64 PORT=8080 docker compose up -d --wait
+          just smoke_test port="8080" arch="x86_64" db_path="server/pypi_data.sqlite"
+
+      - name: Capture Container Logs on Failure
+        if: failure() && steps.smoke.outcome == 'failure'
+        run: docker compose logs
+
+      - name: Tear Down Container
+        if: always()
+        run: just docker_down

@@ -2,7 +2,9 @@
 .dolt*
 config.yaml
 
-pypi_data.sqlite
+*.sqlite
+*.sqlite*
+*.meta.json
 
 .sqlhistory
 

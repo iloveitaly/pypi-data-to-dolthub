@@ -1,0 +1,268 @@
+name: Publish
+
+on:
+  schedule:
+    # Run daily at midnight UTC
+    - cron: "0 0 * * *"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "server/**"
+      - "scripts/**"
+      - "docker-compose.yml"
+      - "mise.toml"
+      - ".github/workflows/publish.yml"
+  workflow_dispatch:
+    inputs:
+      refresh_data:
+        description: "Run full BigQuery data refresh and DoltHub update"
+        type: boolean
+        default: false
+
+concurrency:
+  group: production-publish
+  cancel-in-progress: false
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+
+jobs:
+  prepare_snapshot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      refreshed: ${{ steps.prepare.outputs.refreshed }}
+      row_count: ${{ steps.prepare.outputs.row_count }}
+      sha256: ${{ steps.prepare.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Free Disk Space (Ubuntu)
+        if: github.event_name == 'schedule' || inputs.refresh_data == true
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - id: 'auth'
+        if: github.event_name == 'schedule' || inputs.refresh_data == true
+        uses: 'google-github-actions/auth@v3'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - uses: jdx/mise-action@v4
+        with:
+          bootstrap: true
+          bootstrap_args: --update --yes
+
+      - name: Run Test Gate
+        run: |
+          just lint
+          just test
+
+      - name: Prepare Snapshot
+        id: prepare
+        run: |
+          REFRESH="false"
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.refresh_data }}" = "true" ]; then
+            REFRESH="true"
+          fi
+          just prepare_snapshot refresh="$REFRESH"
+
+      - name: Validate Prepared Snapshot
+        run: just validate_snapshot
+
+      - name: Upload Snapshot Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pypi_snapshot_bundle
+          path: |
+            pypi_data.sqlite.gz
+            pypi_data.sqlite.meta.json
+          retention-days: 2
+
+  publish_container:
+    needs: prepare_snapshot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+        with:
+          bootstrap: true
+          bootstrap_args: --update --yes
+
+      - name: Download Snapshot Artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: pypi_snapshot_bundle
+
+      - name: Bundle Snapshot into Server Context
+        run: just bundle_snapshot
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup QEMU for Multi-Arch Smoke Testing
+        uses: docker/setup-qemu-action@v3
+
+      - name: Determine Image Tags
+        id: tags
+        run: |
+          IMAGE_BASE="ghcr.io/${{ github.repository }}"
+          CANDIDATE_TAG="${IMAGE_BASE}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          LATEST_TAG="${IMAGE_BASE}:latest"
+          echo "candidate_tag=${CANDIDATE_TAG}" >> $GITHUB_OUTPUT
+          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Candidate Image
+        uses: iloveitaly/github-action-railpack@f4c3d22446c5bda92261727f3dbb352eadeab7a3
+        with:
+          context: server
+          platforms: linux/amd64,linux/arm64
+          push: true
+          cache: true
+          tags: ${{ steps.tags.outputs.candidate_tag }}
+
+      - name: Smoke Test Candidate Image (amd64)
+        id: smoke_amd64
+        run: |
+          echo "Pulling candidate image for linux/amd64..."
+          docker pull --platform linux/amd64 ${{ steps.tags.outputs.candidate_tag }}
+          IMAGE=${{ steps.tags.outputs.candidate_tag }} PLATFORM=linux/amd64 PORT=8081 docker compose up -d --wait
+          CONTAINER_ARCH=$(docker compose exec api uname -m 2>/dev/null || docker inspect $(docker compose ps -q api) --format '{{.Architecture}}')
+          echo "Verified container architecture: ${CONTAINER_ARCH}"
+          just smoke_test port="8081" arch="x86_64" db_path="server/pypi_data.sqlite"
+
+      - name: Capture AMD64 Logs on Failure
+        if: failure() && steps.smoke_amd64.outcome == 'failure'
+        run: docker compose logs
+
+      - name: Teardown AMD64 Container
+        if: always()
+        run: just docker_down
+
+      - name: Smoke Test Candidate Image (arm64)
+        id: smoke_arm64
+        run: |
+          echo "Pulling candidate image for linux/arm64..."
+          docker pull --platform linux/arm64 ${{ steps.tags.outputs.candidate_tag }}
+          IMAGE=${{ steps.tags.outputs.candidate_tag }} PLATFORM=linux/arm64 PORT=8082 docker compose up -d --wait
+          CONTAINER_ARCH=$(docker compose exec api uname -m 2>/dev/null || docker inspect $(docker compose ps -q api) --format '{{.Architecture}}')
+          echo "Verified container architecture: ${CONTAINER_ARCH}"
+          just smoke_test port="8082" arch="aarch64" db_path="server/pypi_data.sqlite"
+
+      - name: Capture ARM64 Logs on Failure
+        if: failure() && steps.smoke_arm64.outcome == 'failure'
+        run: docker compose logs
+
+      - name: Teardown ARM64 Container
+        if: always()
+        run: just docker_down
+
+      - name: Promote Candidate Image to Latest
+        id: promote
+        run: |
+          echo "Promoting candidate image to :latest..."
+          docker buildx imagetools create \
+            --tag ${{ steps.tags.outputs.latest_tag }} \
+            ${{ steps.tags.outputs.candidate_tag }}
+          DIGEST=$(docker buildx imagetools inspect ${{ steps.tags.outputs.latest_tag }} --format '{{json .Manifest.Digest}}' 2>/dev/null || docker buildx imagetools inspect ${{ steps.tags.outputs.latest_tag }} | grep -i "digest:" | head -n 1 | awk '{print $2}')
+          echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Write Workflow Summary
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          echo "### Container Image Publication Summary" >> $GITHUB_STEP_SUMMARY
+          if [ "${STATUS}" = "success" ]; then
+            echo "- **Status:** ✅ SUCCESS (Candidate promoted to \`:latest\`)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status:** ❌ FAILED (Candidate NOT promoted)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- **Repository:** \`${{ github.repository }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git SHA:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Candidate Tag:** \`${{ steps.tags.outputs.candidate_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest Tag:** \`${{ steps.tags.outputs.latest_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.promote.outputs.digest }}" ]; then
+            echo "- **Promoted Manifest Digest:** \`${{ steps.promote.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- **Snapshot SHA-256:** \`${{ needs.prepare_snapshot.outputs.sha256 }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Snapshot Rows:** \`${{ needs.prepare_snapshot.outputs.row_count }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **SQLite Version:** \`3.53.1\`" >> $GITHUB_STEP_SUMMARY
+
+  publish_release:
+    needs: prepare_snapshot
+    if: needs.prepare_snapshot.outputs.refreshed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download Snapshot Artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: pypi_snapshot_bundle
+
+      - name: Publish SQLite Release Asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: latest
+          files: |
+            pypi_data.sqlite.gz
+            pypi_data.sqlite.meta.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish_dolt:
+    needs: prepare_snapshot
+    if: needs.prepare_snapshot.outputs.refreshed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+        with:
+          bootstrap: true
+          bootstrap_args: --update --yes
+
+      - name: Install Dolt Setup
+        run: just setup_dolt
+
+      - name: Download Snapshot Artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: pypi_snapshot_bundle
+
+      - name: Import Projects to DoltHub
+        run: |
+          gzip -dc pypi_data.sqlite.gz > pypi_data.sqlite
+          echo '${{ secrets.DOLTHUB_TOKEN }}' | dolt creds import
+          dolt config --global --set user.email "mike@mikebian.co"
+          dolt config --global --set user.name "Michael Bianco"
+          just sqlite_to_dolt
+
+  workflow-keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - uses: liskin/gh-workflow-keepalive@v1.2.1

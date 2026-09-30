@@ -1,0 +1,33 @@
+extend-exclude = [
+    "tmp",
+    ".dolt",
+]
+force-exclude = true
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
+# Add rules: isort (I), flake8-implicit-str-concat (ISC), pyupgrade (UP), flake8-comprehensions (C4), flake8-bugbear (B)
+extend-select = ["I", "ISC", "UP", "C4", "B"]
+ignore = [
+    "B008", # FastAPI Depends/Query in function defaults
+]
+
+[lint.per-file-ignores]
+"scripts/*" = ["E402"]
+"server/tests/*" = ["E402"]
+
+[lint.isort]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "tests",
+    "local-folder",
+]
+
+[lint.isort.sections]
+tests = ["tests"]
+
+[lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "Depends", "Query"]

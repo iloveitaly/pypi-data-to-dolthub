@@ -9,7 +9,8 @@ The processed data is available on DoltHub at [iloveitaly/pypi](https://www.dolt
 This project fetches the latest PyPI package metadata from the [Google BigQuery PyPI Public Dataset](https://console.cloud.google.com/marketplace/details/google_pypi/pypi), processes it to keep only the latest version of each package, and publishes the resulting data to:
 
 1. **DoltHub**: Available at [iloveitaly/pypi](https://www.dolthub.com/repositories/iloveitaly/pypi).
-2. **GitHub Releases**: A standalone SQLite database is uploaded as a `latest` release asset.
+2. **GitHub Releases**: A standalone indexed SQLite database (`pypi_data.sqlite.gz`) and snapshot metadata are uploaded as a `latest` release asset.
+3. **GitHub Container Registry**: A self-contained, high-performance FastAPI search API container at `ghcr.io/iloveitaly/pypi-data-to-dolthub:latest`.
 
 ## Setup
 
@@ -70,7 +71,7 @@ just update_dolt
 This command performs the following steps:
 
 1. **Fetch data from BigQuery**:
-   - Runs `fetch_pypi_data.py` to query the `bigquery-public-data.pypi` dataset.
+   - Runs `scripts/fetch_pypi_data.py` to query the `bigquery-public-data.pypi` dataset.
    - Joins distribution metadata with project metadata to get a comprehensive snapshot of the latest release for every package.
    - Saves the results to a local Parquet file.
 
@@ -99,14 +100,21 @@ This command performs the following steps:
 The script identifies the latest version of every package using BigQuery's `upload_time`. By using a window function (`ROW_NUMBER() OVER(PARTITION BY name ORDER BY upload_time DESC)`), we ensure we always capture the most recently published version, bypassing the complexities and inconsistencies of semantic version string sorting.
 
 ### Indexing
-
+ 
 After processing, the following indexes are created to ensure fast lookups:
 - **Dolt**: `idx_name_prefix` on the first 20 characters of `name`.
-- **SQLite**: `idx_name` on the `name` column.
+- **SQLite**:
+  - `idx_projects_name` on `projects(name)` for exact-name lookups.
+  - `projects_search` table with B-tree index on PEP 503 `normalized_name` for exact and range-based prefix matching.
+  - `projects_fts` FTS5 virtual table with `trigram` tokenizer for literal substring searching.
+
+## API Server
+
+The repository bundles a lightweight, read-only FastAPI service under `server/` to serve search queries with measured sub-10ms warm latencies on the complete ~1.1 GB dataset. See [server/README.md](server/README.md) for full endpoint specifications, benchmark measurements, local development recipes, and Docker deployment instructions.
 
 ## Database Structure
 
-The resulting database contains a single `projects` table with detailed information about each Python package, including:
+The resulting database contains a `projects` table with detailed information about each Python package, including:
 
 - `name`: Package name
 - `version`: Latest version string
@@ -119,3 +127,4 @@ The resulting database contains a single `projects` table with detailed informat
 - `requires_dist`: JSON array of dependencies
 - `classifiers`: JSON array of PyPI classifiers
 - `project_url` / `package_url`: Direct links to PyPI
+

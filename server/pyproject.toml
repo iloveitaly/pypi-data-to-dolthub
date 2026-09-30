@@ -1,0 +1,18 @@
+[project]
+name = "server"
+version = "0.1.0"
+description = "PyPI Data to DoltHub API Server"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.121.3",
+    "structlog-config[fastapi]>=0.7.0",
+    "uvicorn>=0.38.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "httpx>=0.28.1",
+    "ruff>=0.15.0",
+]

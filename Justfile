@@ -2,27 +2,39 @@ export PATH := "/opt/homebrew/opt/sqlite/bin:" + env_var('PATH')
 
 set unstable
 
-setup:
+setup: setup_dolt
+
+setup_dolt:
 	if [ "$(uname)" = "Darwin" ]; then \
 		brew install dolt; \
 	else \
 		sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | sudo bash'; \
 	fi
 
-	pip install sqlite3-to-mysql google-cloud-bigquery pyarrow pandas db-dtypes
+update_dolt: (build_db "true") sqlite_to_dolt
 
-update_dolt: build_sqlite sqlite_to_dolt
+# Prepare snapshot from BigQuery (or download latest release)
+prepare_snapshot refresh="false":
+	scripts/prepare_snapshot.py {{ if refresh == "true" { "--refresh" } else { "" } }}
 
-build_sqlite:
-	# Fetching latest PyPI metadata from Google BigQuery
-	python fetch_pypi_data.py
+# Decompress and validate prepared snapshot integrity against metadata
+validate_snapshot gz="pypi_data.sqlite.gz" meta="pypi_data.sqlite.meta.json":
+	gzip -dc {{gz}} > tmp_validate.sqlite
+	scripts/validate_db.py tmp_validate.sqlite --meta {{meta}}
+	rm tmp_validate.sqlite
 
-	# Aggregating data via DuckDB; requires local temp space for disk-spilling
-	mkdir -p duckdb_temp
-	duckdb < build_latest_sqlite.sql
+# Bundle verified snapshot into server build context
+bundle_snapshot src_db="pypi_data.sqlite" dest_dir="server":
+	scripts/bundle_snapshot.py --source-db {{src_db}} --dest-dir {{dest_dir}}
 
-	rm -rf duckdb_temp pypi_metadata.parquet
+# Build, index, validate, and bundle the SQLite database snapshot
+build_db refresh="true": (prepare_snapshot refresh) (bundle_snapshot "pypi_data.sqlite" "server")
 
+build_sqlite: (build_db "true")
+
+# Generate a fixture SQLite database for local development and testing
+fixture_db:
+	scripts/build_search_index.py --create-fixture server/pypi_data.sqlite
 
 reset_dolt:
 	rm -rf .dolt* || true
@@ -38,8 +50,9 @@ sqlite_to_dolt: reset_dolt
 	# Wait briefly to ensure server starts
 	sleep 2
 
-	# Import SQLite to Dolt using sqlite3-to-mysql
-	sqlite3mysql --sqlite-file pypi_data.sqlite \
+	# Import SQLite to Dolt using sqlite3-to-mysql via uvx, exporting ONLY projects table
+	uvx --from sqlite3-to-mysql sqlite3mysql --sqlite-file pypi_data.sqlite \
+			--sqlite-tables projects \
 			--mysql-database $(basename $PWD) \
 			--mysql-user root \
 			--mysql-password "" \
@@ -50,9 +63,8 @@ sqlite_to_dolt: reset_dolt
 	kill $DOLT_PID
 	sleep 5
 
-	# Add indexes to both Dolt and the SQLite file
-	dolt sql < mysql_indexes.sql
-	sqlite3 pypi_data.sqlite "CREATE INDEX IF NOT EXISTS idx_name ON projects (name);"
+	# Add indexes to Dolt
+	dolt sql < scripts/sql/mysql_indexes.sql
 
 	dolt docs upload README.md README.md
 	dolt add dolt_docs
@@ -60,3 +72,60 @@ sqlite_to_dolt: reset_dolt
 	dolt add projects
 	dolt commit -m "pypi update"
 	dolt push --force origin main
+
+# Check Python code formatting and linting
+lint:
+	ruff check .
+	ruff format --check .
+
+# Automatically fix linting and formatting
+lint-fix:
+	ruff check --fix .
+	ruff format .
+
+# Run full server and index builder test suite
+test:
+	cd server && uv sync --locked && uv run pytest -v
+
+test_server: test
+
+# Benchmark server search performance locally
+benchmark iterations="30" concurrency="5":
+	cd server && uv run python benchmark_search.py --iterations {{iterations}} --concurrency {{concurrency}}
+
+# Run container smoke test against running instance
+smoke_test port="8000" sqlite_version="3.53.1" arch="" db_path="":
+	scripts/smoke_test.py --port {{port}} --expected-sqlite-version {{sqlite_version}} {{ if arch != "" { "--expected-arch " + arch } else { "" } }} {{ if db_path != "" { "--db-path " + db_path } else { "" } }}
+
+# Build docker image for the API server (bundles selected root snapshot first)
+docker src_db="pypi_data.sqlite": (bundle_snapshot src_db "server")
+	cd server && railpack build .
+	docker tag server:latest pypi-data-to-dolthub:latest
+
+# Start container with healthcheck and wait for readiness
+docker_up port="8000":
+	PORT={{port}} docker compose up -d --wait
+
+# Stop Docker Compose container and delete volumes
+docker_down:
+	docker compose down -v
+
+# Start container, smoke test endpoints, capture logs on failure, and clean up
+test_container port="8080":
+	PORT={{port}} docker compose up -d --wait || (docker compose logs && exit 1)
+	just smoke_test port="{{port}}" || (docker compose logs && just docker_down && exit 1)
+	just docker_down
+
+# Start the FastAPI server locally for development with auto-reload
+dev_server:
+	@echo "Starting dev server..."
+	cd server && DB_PATH=pypi_data.sqlite uv run uvicorn main:app --reload
+
+dev: dev_server
+
+# Set repository metadata (description, homepage, topics) from pyproject.toml
+github_repo_set_metadata:
+	gh repo edit \
+		--description "$(yq '.project.description' pyproject.toml)" \
+		--homepage "$(yq '.project.urls.Repository' pyproject.toml)" \
+		--add-topic "$(yq '.project.keywords | join(",")' pyproject.toml)"
