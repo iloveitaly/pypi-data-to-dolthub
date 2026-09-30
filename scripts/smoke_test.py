@@ -224,11 +224,12 @@ def run_smoke_tests(
     expected_sqlite: str | None = None,
     expected_arch: str | None = None,
     db_path: Path | None = None,
+    retries: int = DEFAULT_RETRIES,
 ) -> None:
     print(f"Starting smoke tests against {base_url}...")
 
     # 1. Health check, SQLite version, and container architecture verification
-    health_data = wait_for_ready(base_url)
+    health_data = wait_for_ready(base_url, retries=retries)
     assert health_data.get("status") == "ok", f"Health status not ok: {health_data}"
     active_sqlite = health_data.get("sqlite_version")
     print(f"Active SQLite runtime reported by /health: {active_sqlite}")

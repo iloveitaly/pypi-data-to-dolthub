@@ -243,3 +243,36 @@ def test_run_smoke_tests_fails_when_substring_disabled(tmp_path):
                 base_url="http://localhost:8000",
                 db_path=catalog_db,
             )
+
+
+def test_smoke_test_cli(tmp_path):
+    """Test invoking smoke_test CLI entrypoint via CliRunner."""
+    from click.testing import CliRunner
+    from smoke_test import cli
+
+    catalog_db = tmp_path / "catalog.sqlite"
+    create_indexed_catalog(catalog_db, ["requests", "pydantic"])
+
+    with patch("smoke_test.run_smoke_tests") as mock_run:
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "--port",
+                "8081",
+                "--expected-arch",
+                "x86_64",
+                "--db-path",
+                str(catalog_db),
+                "--retries",
+                "10",
+            ],
+        )
+        assert result.exit_code == 0
+        mock_run.assert_called_once_with(
+            base_url="http://localhost:8081",
+            expected_sqlite="3.53.1",
+            expected_arch="x86_64",
+            db_path=catalog_db.resolve(),
+            retries=10,
+        )
