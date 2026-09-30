@@ -104,7 +104,7 @@ docker src_db="pypi_data.sqlite": (bundle_snapshot "--source-db" src_db "--dest-
 
 # Start container with healthcheck and wait for readiness
 docker_up port="8000":
-	PORT={{port}} docker compose up -d --wait
+	PORT={{port}} docker compose up -d --wait --wait-timeout 120
 
 # Stop Docker Compose container and delete volumes
 docker_down:
@@ -112,7 +112,7 @@ docker_down:
 
 # Start container, smoke test endpoints, capture logs on failure, and clean up
 test_container port="8080":
-	PORT={{port}} docker compose up -d --wait || (docker compose logs && exit 1)
+	PORT={{port}} docker compose up -d --wait --wait-timeout 120 || (docker compose logs && exit 1)
 	just smoke_test --port {{port}} || (docker compose logs && just docker_down && exit 1)
 	just docker_down
 

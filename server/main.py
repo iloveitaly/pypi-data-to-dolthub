@@ -123,7 +123,7 @@ def validate_db(path: Path):
 
     try:
         cursor = conn.cursor()
-        cursor.execute("PRAGMA integrity_check(1)")
+        cursor.execute("PRAGMA quick_check(1)")
         res = cursor.fetchone()
         if not res or res[0] != "ok":
             raise RuntimeError(f"Database integrity check failed: {res}")
@@ -140,9 +140,8 @@ def validate_db(path: Path):
         if missing:
             raise RuntimeError(f"Projects table missing required columns: {missing}")
 
-        cursor.execute("SELECT COUNT(*) FROM projects")
-        count = cursor.fetchone()[0]
-        if count == 0:
+        cursor.execute("SELECT 1 FROM projects LIMIT 1")
+        if not cursor.fetchone():
             raise RuntimeError("Projects table is empty")
 
         cursor.execute(

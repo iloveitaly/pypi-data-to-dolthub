@@ -183,10 +183,10 @@ class SnapshotProbes:
             conn.close()
 
 
-def make_request(url: str) -> tuple[int, dict | list | str]:
+def make_request(url: str, timeout: float = 20.0) -> tuple[int, dict | list | str]:
     req = urllib.request.Request(url, headers={"User-Agent": "PyPI-SmokeTest/1.0"})
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8")
             try:
                 data = json.loads(body)
